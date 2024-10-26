@@ -56,9 +56,14 @@ def get_private_key(expired=False):
 
 def generate_keys():
     """Generate an initial set of keys for the database."""
+    # Generate a valid key
     valid_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    # Generate an expired key
     expired_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    
+    # Save the valid key with a future expiration time
     save_private_key(valid_key, int((datetime.datetime.utcnow() + datetime.timedelta(hours=1)).timestamp()))
+    # Save the expired key with a past expiration time
     save_private_key(expired_key, int((datetime.datetime.utcnow() - datetime.timedelta(hours=1)).timestamp()))
 
 # Base64 encoding helper
@@ -92,12 +97,7 @@ class MyServer(BaseHTTPRequestHandler):
                 "user": "username",
                 "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1) if not expired else datetime.datetime.utcnow() - datetime.timedelta(hours=1)
             }
-            pem = private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-            encoded_jwt = jwt.encode(token_payload, pem, algorithm="RS256", headers=headers)
+            encoded_jwt = jwt.encode(token_payload, private_key, algorithm="RS256", headers=headers)
             
             self.send_response(200)
             self.end_headers()
@@ -120,7 +120,7 @@ class MyServer(BaseHTTPRequestHandler):
                     "alg": "RS256",
                     "kty": "RSA",
                     "use": "sig",
-                    "kid": "goodKID",
+                    "kid": "goodKID",  # Consider using an actual identifier based on the key's status
                     "n": int_to_base64(numbers.n),
                     "e": int_to_base64(numbers.e),
                 })
